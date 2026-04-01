@@ -24,6 +24,11 @@ const SEVERITY_COLORS: Record<
     icon: "💡",
     label: "Suggestion",
   },
+  improvement: {
+    badge: "bg-green-500/10 text-green-300 border-green-500/20",
+    icon: "✨",
+    label: "Improvement",
+  },
 };
 
 function SummaryCard({
@@ -48,14 +53,19 @@ function SummaryCard({
 
 function CommentCard({ comment }: { comment: ReviewComment }) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const style = SEVERITY_COLORS[comment.severity];
 
   const handleCopy = () => {
-    const text = `**${comment.file}:${comment.line}** [${comment.severity}]\n${comment.comment}`;
+    const text = `**${comment.file}:${comment.line}** [${comment.severity}]\n${comment.comment}${
+      comment.reasoning ? `\n\nReasoning: ${comment.reasoning}` : ""
+    }${comment.suggestedFix ? `\n\nSuggested Fix: ${comment.suggestedFix}` : ""}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const hasDetails = comment.reasoning || comment.suggestedFix;
 
   return (
     <div className="card-glass rounded-2xl p-6 flex flex-col gap-4 hover:bg-[#161616] transition-all duration-300 group">
@@ -68,17 +78,57 @@ function CommentCard({ comment }: { comment: ReviewComment }) {
             <span className="text-[#666666] text-xs font-inter">
               :{comment.line}
             </span>
+            {comment.confidence !== undefined && (
+              <span className="text-[#888888] text-xs font-inter">
+                ({Math.round(comment.confidence * 100)}% confidence)
+              </span>
+            )}
           </div>
           <p className="text-sm text-[#888888] leading-relaxed font-inter">
             {comment.comment}
           </p>
+
+          {/* Expandable details section */}
+          {hasDetails && expanded && (
+            <div className="mt-4 pt-4 border-t border-[#333333] space-y-3">
+              {comment.reasoning && (
+                <div>
+                  <p className="text-xs font-bold text-[#FF6B50] uppercase tracking-wider mb-2">
+                    Why This Matters
+                  </p>
+                  <p className="text-sm text-[#999999] leading-relaxed font-inter">
+                    {comment.reasoning}
+                  </p>
+                </div>
+              )}
+              {comment.suggestedFix && (
+                <div>
+                  <p className="text-xs font-bold text-[#4FC3F7] uppercase tracking-wider mb-2">
+                    Suggested Fix
+                  </p>
+                  <p className="text-sm text-[#999999] leading-relaxed font-inter whitespace-pre-wrap">
+                    {comment.suggestedFix}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <span
             className={`text-[10px] font-bold px-3 py-1.5 rounded-full border ${style.badge} font-inter uppercase tracking-wider`}
           >
             {style.icon} {style.label}
           </span>
+          {hasDetails && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="p-2.5 rounded-lg bg-[#1a1a1a] hover:bg-white hover:text-black border border-[#333333] transition-all duration-300"
+              title={expanded ? "Hide details" : "Show details"}
+            >
+              <span className="text-base">{expanded ? "△" : "▽"}</span>
+            </button>
+          )}
           <button
             onClick={handleCopy}
             className="p-2.5 rounded-lg bg-[#1a1a1a] hover:bg-white hover:text-black border border-[#333333] transition-all duration-300"
@@ -156,6 +206,8 @@ export default function PRReviewer() {
         error: result.comments.filter((c) => c.severity === "error").length,
         warning: result.comments.filter((c) => c.severity === "warning").length,
         suggestion: result.comments.filter((c) => c.severity === "suggestion")
+          .length,
+        improvement: result.comments.filter((c) => c.severity === "improvement")
           .length,
       }
     : null;
@@ -278,11 +330,12 @@ export default function PRReviewer() {
                       Analysis Summary
                     </h2>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                     <SummaryCard label="Total Issues" count={counts.total} icon="📊" />
                     <SummaryCard label="Errors" count={counts.error} icon="🔴" />
                     <SummaryCard label="Warnings" count={counts.warning} icon="🟡" />
                     <SummaryCard label="Suggestions" count={counts.suggestion} icon="🔵" />
+                    <SummaryCard label="Improvements" count={counts.improvement} icon="✨" />
                   </div>
                 </div>
               )}
@@ -297,6 +350,7 @@ export default function PRReviewer() {
                   { key: "error", label: "Errors", count: result.comments.filter((c) => c.severity === "error").length },
                   { key: "warning", label: "Warnings", count: result.comments.filter((c) => c.severity === "warning").length },
                   { key: "suggestion", label: "Suggestions", count: result.comments.filter((c) => c.severity === "suggestion").length },
+                  { key: "improvement", label: "Improvements", count: result.comments.filter((c) => c.severity === "improvement").length },
                 ].map(({ key, label, count }) => (
                   <button
                     key={key}

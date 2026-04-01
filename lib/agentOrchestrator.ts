@@ -14,6 +14,7 @@ import {
   checkPerformance,
   checkTypes,
 } from "@/lib/toolImplementations";
+import { analyzeSemanticallyLLM } from "@/lib/llmAnalyzerTool";
 
 export interface FileToAnalyze {
   filename: string;
@@ -73,6 +74,42 @@ async function executeTool(
 }
 
 /**
+ * Analyze a single file using LLM semantic analysis (Phase 2)
+ * Replaces regex-based tools with deep AI understanding
+ */
+async function analyzeFileSemanticLLM(
+  file: FileToAnalyze,
+  client: OpenAI
+): Promise<ReviewComment[]> {
+  if (!file.content) {
+    console.log(`[llm-analyzer] Skipping ${file.filename} - no content`);
+    return [];
+  }
+
+  const language = file.language || getLanguageFromFilename(file.filename);
+  
+  try {
+    const findings = await analyzeSemanticallyLLM(client, file.filename, file.content, language);
+    
+    // Convert semantic findings to ReviewComment format
+    const comments: ReviewComment[] = findings.map((finding) => ({
+      file: file.filename,
+      line: finding.line,
+      severity: finding.severity,
+      comment: finding.issue,
+      reasoning: finding.reasoning,
+      suggestedFix: finding.suggestedFix,
+      confidence: finding.confidence,
+    }));
+
+    return comments;
+  } catch (error) {
+    console.error(`[llm-analyzer] Error analyzing ${file.filename}:`, error);
+    return [];
+  }
+}
+
+/**
  * Analyze a single file with its own agent loop
  * Each file gets independent analysis to avoid token limits
  */
@@ -105,7 +142,7 @@ Call all 4 tools: analyze_file, check_security, check_performance, and check_typ
 
   let fileFindings: Array<{ line: number; severity: string; issue: string }> = [];
   let iterations = 0;
-  const maxIterations = 5; // Each file gets up to 5 iterations
+  const maxIterations = 10; // Each file gets up to 10 iterations (increased from 5)
 
   console.log(`[agent-file] Analyzing ${file.filename}...`);
 
@@ -119,7 +156,7 @@ Call all 4 tools: analyze_file, check_security, check_performance, and check_typ
         tools: AGENT_TOOLS as unknown as OpenAI.ChatCompletionTool[],
         tool_choice: "auto",
         temperature: 0.3,
-        max_tokens: 1024, // Smaller limit per file
+        max_tokens: 2048, // Increased from 1024 for deeper analysis
       });
 
       if (response.choices[0].finish_reason === "tool_calls") {
@@ -194,6 +231,7 @@ export async function orchestrateCodeReview(
         errors: 0,
         warnings: 0,
         suggestions: 0,
+        improvements: 0,
         filesReviewed: 0,
       },
     };
@@ -218,15 +256,10 @@ export async function orchestrateCodeReview(
     const batchResults = await Promise.all(
       batch.map(async (file) => {
         try {
-          console.log(`[agent-file] Analyzing ${file.filename}...`);
-          const fileFindings = await analyzeFileWithAgent(file, client);
-
-          return fileFindings.map((finding) => ({
-            file: file.filename,
-            line: finding.line,
-            severity: finding.severity as Severity,
-            comment: finding.issue,
-          }));
+          console.log(`[llm-analyzer] Analyzing ${file.filename}...`);
+          // Use LLM semantic analysis (Phase 2) instead of regex-based tools
+          const fileComments = await analyzeFileSemanticLLM(file, client);
+          return fileComments;
         } catch (error) {
           console.error(`[agent] Failed to analyze ${file.filename}:`, error);
           return [];
@@ -243,22 +276,7 @@ export async function orchestrateCodeReview(
   console.log(`[agent] Completed analysis. Total findings: ${allFindings.length}`);
 
   // Aggregate and deduplicate findings
-  const aggregatedFindings = aggregateFindings(
-    allFindings.reduce(
-      (acc, finding) => {
-        if (!acc[finding.file]) {
-          acc[finding.file] = [];
-        }
-        acc[finding.file].push({
-          line: finding.line,
-          severity: finding.severity,
-          issue: finding.comment,
-        });
-        return acc;
-      },
-      {} as Record<string, Array<{ line: number; severity: string; issue: string }>>
-    )
-  );
+  const aggregatedFindings = aggregateFindings(allFindings);
 
   // Calculate summary
   const summary = {
@@ -266,6 +284,7 @@ export async function orchestrateCodeReview(
     errors: aggregatedFindings.filter((f) => f.severity === "error").length,
     warnings: aggregatedFindings.filter((f) => f.severity === "warning").length,
     suggestions: aggregatedFindings.filter((f) => f.severity === "suggestion").length,
+    improvements: aggregatedFindings.filter((f) => f.severity === "improvement").length,
     filesReviewed: jstsFiles.length,
   };
 
@@ -279,46 +298,43 @@ export async function orchestrateCodeReview(
  * Aggregate findings from multiple tool runs
  * Deduplicates issues, picks highest severity if same line mentioned multiple times
  */
-function aggregateFindings(
-  allToolResults: Record<string, Array<{ line: number; severity: string; issue: string }>>
-): ReviewComment[] {
+/**
+ * Aggregate findings from multiple analyses
+ * Deduplicates issues, picks highest severity/confidence if same line mentioned multiple times
+ */
+function aggregateFindings(findings: ReviewComment[]): ReviewComment[] {
   const aggregated: Record<string, ReviewComment> = {};
 
-  Object.entries(allToolResults).forEach(([file, findings]) => {
-    findings.forEach((finding) => {
-      const key = `${file}:${finding.line}`;
+  findings.forEach((finding) => {
+    const key = `${finding.file}:${finding.line}`;
 
-      if (aggregated[key]) {
-        // Same line already has finding - keep highest severity
-        const severityRank = { error: 3, warning: 2, suggestion: 1 };
-        const currentRank = severityRank[finding.severity as keyof typeof severityRank] || 0;
-        const existingRank =
-          severityRank[aggregated[key].severity as keyof typeof severityRank] || 0;
+    if (aggregated[key]) {
+      // Same line already has finding - keep highest severity, then confidence
+      const severityRank = { error: 3, warning: 2, suggestion: 1, improvement: 0 };
+      const currentRank = severityRank[finding.severity as keyof typeof severityRank] ?? -1;
+      const existingRank = severityRank[aggregated[key].severity as keyof typeof severityRank] ?? -1;
 
-        if (currentRank > existingRank) {
-          // Update with higher severity
-          aggregated[key].severity = finding.severity as "error" | "warning" | "suggestion";
-          aggregated[key].comment = finding.issue;
-        }
-      } else {
-        // New finding for this line
-        aggregated[key] = {
-          file,
-          line: finding.line,
-          severity: finding.severity as "error" | "warning" | "suggestion",
-          comment: finding.issue,
-        };
+      // Keep the one with higher severity, or if equal, higher confidence
+      if (
+        currentRank > existingRank ||
+        (currentRank === existingRank &&
+          (finding.confidence ?? 0) > (aggregated[key].confidence ?? 0))
+      ) {
+        aggregated[key] = finding;
       }
-    });
+    } else {
+      aggregated[key] = finding;
+    }
   });
 
   // Convert to array and sort by severity + line number
   return Object.values(aggregated)
     .sort((a, b) => {
-      const severityRank = { error: 3, warning: 2, suggestion: 1 };
-      const aDifference =
-        severityRank[a.severity as keyof typeof severityRank] - severityRank[b.severity as keyof typeof severityRank];
-      if (aDifference !== 0) return -aDifference; // Higher severity first
+      const severityRank = { error: 3, warning: 2, suggestion: 1, improvement: 0 };
+      const aDiff =
+        severityRank[a.severity as keyof typeof severityRank] -
+        severityRank[b.severity as keyof typeof severityRank];
+      if (aDiff !== 0) return -aDiff; // Higher severity first
       return a.line - b.line; // Same severity, sort by line
     });
 }
