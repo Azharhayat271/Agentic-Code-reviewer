@@ -5,7 +5,7 @@
  */
 
 import OpenAI from "openai";
-import { ReviewComment, AgentReviewResult } from "@/types";
+import { ReviewComment, AgentReviewResult, Severity } from "@/types";
 import { AGENT_TOOLS } from "@/lib/agentTools";
 import { AGENT_SYSTEM_PROMPT, AGENT_USER_PROMPT_TEMPLATE, AGENT_FINALIZE_PROMPT } from "@/lib/agentPrompts";
 import {
@@ -73,8 +73,107 @@ async function executeTool(
 }
 
 /**
+ * Analyze a single file with its own agent loop
+ * Each file gets independent analysis to avoid token limits
+ */
+async function analyzeFileWithAgent(
+  file: FileToAnalyze,
+  client: OpenAI
+): Promise<Array<{ line: number; severity: string; issue: string }>> {
+  if (!file.content) {
+    console.log(`[agent-file] Skipping ${file.filename} - no content`);
+    return [];
+  }
+
+  const language = file.language || getLanguageFromFilename(file.filename);
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    {
+      role: "user",
+      content: `Analyze this code file using all available tools:
+
+File: ${file.filename}
+Language: ${language}
+
+Code changes:
+\`\`\`${language}
+${file.content}
+\`\`\`
+
+Call all 4 tools: analyze_file, check_security, check_performance, and check_types for this file.`,
+    },
+  ];
+
+  let fileFindings: Array<{ line: number; severity: string; issue: string }> = [];
+  let iterations = 0;
+  const maxIterations = 5; // Each file gets up to 5 iterations
+
+  console.log(`[agent-file] Analyzing ${file.filename}...`);
+
+  while (iterations < maxIterations) {
+    iterations++;
+
+    try {
+      const response = await client.chat.completions.create({
+        model: "gpt-4o",
+        messages,
+        tools: AGENT_TOOLS as unknown as OpenAI.ChatCompletionTool[],
+        tool_choice: "auto",
+        temperature: 0.3,
+        max_tokens: 1024, // Smaller limit per file
+      });
+
+      if (response.choices[0].finish_reason === "tool_calls") {
+        const toolCalls = response.choices[0].message.tool_calls || [];
+
+        messages.push({
+          role: "assistant",
+          content: response.choices[0].message.content || "",
+          tool_calls: toolCalls as OpenAI.ChatCompletionMessageToolCall[],
+        });
+
+        // Execute tools and add results as separate messages (correct OpenAI format)
+        for (const toolCall of toolCalls) {
+          try {
+            const toolInput = JSON.parse(toolCall.function.arguments);
+            const result = await executeTool(toolCall.function.name, toolInput);
+            fileFindings.push(...result.findings);
+
+            // Add each tool result as a separate message with role 'tool'
+            messages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(result),
+            });
+          } catch (error) {
+            // Add error as tool result
+            messages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: JSON.stringify({
+                error: error instanceof Error ? error.message : "Unknown error",
+              }),
+            });
+          }
+        }
+      } else {
+        // Agent finished or hit limit
+        break;
+      }
+    } catch (error) {
+      console.error(`[agent-file] Error analyzing ${file.filename}:`, error);
+      break;
+    }
+  }
+
+  console.log(
+    `[agent-file] ${file.filename}: ${fileFindings.length} findings in ${iterations} iterations`
+  );
+  return fileFindings;
+}
+
+/**
  * Main orchestrator function
- * Runs the agentic code review loop
+ * Processes files individually to prevent token limits
  */
 export async function orchestrateCodeReview(
   files: FileToAnalyze[],
@@ -100,142 +199,78 @@ export async function orchestrateCodeReview(
     };
   }
 
-  // Prepare file list for analysis
-  const fileList = jstsFiles
-    .map((f) => `- ${f.filename} (${f.language || getLanguageFromFilename(f.filename)})`)
-    .join("\n");
+  console.log(`[agent] Processing ${jstsFiles.length} files in parallel batches`);
 
-  // Prepare file contents with line numbers for context
-  const filesContent = jstsFiles
-    .map((f) => {
-      if (!f.content) {
-        return `### ${f.filename}\n\`\`\`\nNo content provided\n\`\`\``;
-      }
-      const lines = f.content
-        .split("\n")
-        .map((line, idx) => `${String(idx + 1).padStart(4, " ")} | ${line}`)
-        .join("\n");
-      return `### ${f.filename}\n\`\`\`\n${lines}\n\`\`\``;
-    })
-    .join("\n\n");
+  // Batch files and process in parallel for efficiency
+  const BATCH_SIZE = 5; // Process 5 files at a time in parallel
+  const allFindings: ReviewComment[] = [];
 
-  // Initialize conversation messages
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
-    {
-      role: "user",
-      content: AGENT_USER_PROMPT_TEMPLATE(fileList, filesContent),
-    },
-  ];
+  for (let i = 0; i < jstsFiles.length; i += BATCH_SIZE) {
+    const batch = jstsFiles.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(jstsFiles.length / BATCH_SIZE);
 
-  let allToolResults: Record<
-    string,
-    Array<{ line: number; severity: string; issue: string }>
-  > = {};
-  let iterations = 0;
-  const maxIterations = 20;
+    console.log(
+      `[agent] Processing batch ${batchNum}/${totalBatches} (${batch.length} files in parallel)`
+    );
 
-  console.log("[agent] Starting orchestration loop for", jstsFiles.length, "files");
+    // Process all files in batch in parallel
+    const batchResults = await Promise.all(
+      batch.map(async (file) => {
+        try {
+          console.log(`[agent-file] Analyzing ${file.filename}...`);
+          const fileFindings = await analyzeFileWithAgent(file, client);
 
-  // Agentic loop
-  while (iterations < maxIterations) {
-    iterations++;
-    console.log(`[agent] Iteration ${iterations}`);
-
-    try {
-      // Call GPT-4o with tools
-      const response = await client.chat.completions.create({
-        model: "gpt-4o",
-        messages,
-        tools: AGENT_TOOLS as unknown as OpenAI.ChatCompletionTool[],
-        tool_choice: "auto",
-        temperature: 0.3,
-        max_tokens: 4096,
-      });
-
-      console.log(`[agent] Response stop_reason: ${response.choices[0].finish_reason}`);
-
-      // Check if there are tool calls
-      if (response.choices[0].finish_reason === "tool_calls") {
-        const toolCalls = response.choices[0].message.tool_calls || [];
-        console.log(`[agent] Processing ${toolCalls.length} tool calls`);
-
-        // Add assistant message to conversation
-        messages.push({
-          role: "assistant",
-          content: response.choices[0].message.content || "",
-          tool_calls: toolCalls as OpenAI.ChatCompletionMessageToolCall[],
-        });
-
-        // Execute all tool calls locally
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const toolResults: any[] = [];
-
-        for (const toolCall of toolCalls) {
-          try {
-            const toolInput = JSON.parse(toolCall.function.arguments);
-            console.log(`[agent] Executing tool: ${toolCall.function.name} for file: ${toolInput.file}`);
-
-            const result = await executeTool(toolCall.function.name, toolInput);
-
-            // Store results for later aggregation
-            if (!allToolResults[result.file]) {
-              allToolResults[result.file] = [];
-            }
-            allToolResults[result.file].push(...result.findings);
-
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: toolCall.id,
-              content: JSON.stringify(result),
-            });
-          } catch (error) {
-            console.error(`[agent] Tool execution error:`, error);
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: toolCall.id,
-              content: JSON.stringify({
-                error: error instanceof Error ? error.message : "Unknown error",
-              }),
-              is_error: true,
-            });
-          }
+          return fileFindings.map((finding) => ({
+            file: file.filename,
+            line: finding.line,
+            severity: finding.severity as Severity,
+            comment: finding.issue,
+          }));
+        } catch (error) {
+          console.error(`[agent] Failed to analyze ${file.filename}:`, error);
+          return [];
         }
+      })
+    );
 
-        // Add tool results to conversation
-        messages.push({
-          role: "user",
-          content: toolResults,
-        } as unknown as OpenAI.ChatCompletionMessageParam);
-      } else if (response.choices[0].finish_reason === "stop") {
-        // Agent is done - break loop
-        console.log("[agent] Agent finished (stop)");
-        break;
-      } else {
-        console.log(`[agent] Unexpected finish reason: ${response.choices[0].finish_reason}`);
-        break;
-      }
-    } catch (error) {
-      console.error("[agent] Orchestration error:", error);
-      throw error;
-    }
+    // Flatten and add to all findings
+    batchResults.forEach((batchFinding) => {
+      allFindings.push(...batchFinding);
+    });
   }
 
-  console.log("[agent] Orchestration complete. Total iterations:", iterations);
+  console.log(`[agent] Completed analysis. Total findings: ${allFindings.length}`);
 
-  // Aggregate and consolidate findings
-  const findings = aggregateFindings(allToolResults);
+  // Aggregate and deduplicate findings
+  const aggregatedFindings = aggregateFindings(
+    allFindings.reduce(
+      (acc, finding) => {
+        if (!acc[finding.file]) {
+          acc[finding.file] = [];
+        }
+        acc[finding.file].push({
+          line: finding.line,
+          severity: finding.severity,
+          issue: finding.comment,
+        });
+        return acc;
+      },
+      {} as Record<string, Array<{ line: number; severity: string; issue: string }>>
+    )
+  );
 
   // Calculate summary
   const summary = {
-    totalIssues: findings.length,
-    errors: findings.filter((f) => f.severity === "error").length,
-    warnings: findings.filter((f) => f.severity === "warning").length,
-    suggestions: findings.filter((f) => f.severity === "suggestion").length,
+    totalIssues: aggregatedFindings.length,
+    errors: aggregatedFindings.filter((f) => f.severity === "error").length,
+    warnings: aggregatedFindings.filter((f) => f.severity === "warning").length,
+    suggestions: aggregatedFindings.filter((f) => f.severity === "suggestion").length,
     filesReviewed: jstsFiles.length,
   };
 
   return {
-    findings,
+    findings: aggregatedFindings,
     summary,
   };
 }

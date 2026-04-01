@@ -5,52 +5,93 @@ import { ReviewComment, ReviewResult, Severity } from "@/types";
 import { getStoredToken } from "@/lib/encryption";
 import TokenManager from "@/components/TokenManager";
 
-const SEVERITY_STYLES: Record<Severity, { badge: string; border: string; label: string }> = {
-  error: { badge: "bg-red-100 text-red-700 border border-red-200", border: "border-l-red-500", label: "Error" },
-  warning: { badge: "bg-yellow-100 text-yellow-700 border border-yellow-200", border: "border-l-yellow-500", label: "Warning" },
-  suggestion: { badge: "bg-blue-100 text-blue-700 border border-blue-200", border: "border-l-blue-500", label: "Suggestion" },
+const SEVERITY_COLORS: Record<
+  Severity,
+  { badge: string; icon: string; label: string; bg: string }
+> = {
+  error: {
+    badge: "bg-red-500/20 text-red-300 border-red-500/30",
+    icon: "⚠️",
+    label: "Error",
+    bg: "bg-red-500/5",
+  },
+  warning: {
+    badge: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+    icon: "⚡",
+    label: "Warning",
+    bg: "bg-yellow-500/5",
+  },
+  suggestion: {
+    badge: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+    icon: "💡",
+    label: "Suggestion",
+    bg: "bg-blue-500/5",
+  },
 };
 
-function SummaryCard({ label, count, color }: { label: string; count: number; color: string }) {
+function SummaryCard({
+  label,
+  count,
+  icon,
+}: {
+  label: string;
+  count: number;
+  icon: string;
+}) {
   return (
-    <div className={`rounded-xl border ${color} p-4 flex flex-col items-center gap-1 min-w-[100px]`}>
-      <span className="text-2xl font-bold">{count}</span>
-      <span className="text-sm text-gray-500">{label}</span>
+    <div className="card-glass rounded-xl p-6 flex flex-col items-center gap-3 min-w-[140px]">
+      <span className="text-3xl">{icon}</span>
+      <span className="text-4xl font-bold font-manrope">{count}</span>
+      <span className="text-xs text-zinc-400 font-inter uppercase tracking-wide">
+        {label}
+      </span>
     </div>
   );
 }
 
 function CommentCard({ comment }: { comment: ReviewComment }) {
   const [copied, setCopied] = useState(false);
-  const style = SEVERITY_STYLES[comment.severity];
+  const style = SEVERITY_COLORS[comment.severity];
 
   const handleCopy = () => {
     const text = `**${comment.file}:${comment.line}** [${comment.severity}]\n${comment.comment}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 border-l-4 ${style.border} p-4 flex flex-col gap-2 shadow-sm`}>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-sm text-gray-700 font-medium">{comment.file}</span>
-          <span className="text-gray-400 text-sm">:{comment.line}</span>
+    <div
+      className={`card-glass rounded-xl p-5 flex flex-col gap-3 border-l-4 transition-all ${style.bg} border-l-red-500/50 hover:border-l-red-500`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="font-mono text-sm font-semibold text-white">
+              {comment.file}
+            </span>
+            <span className="text-zinc-500 text-sm font-inter">
+              :{comment.line}
+            </span>
+          </div>
+          <p className="text-sm text-zinc-300 leading-relaxed font-inter">
+            {comment.comment}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${style.badge}`}>
-            {style.label}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span
+            className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${style.badge} font-inter`}
+          >
+            {style.icon} {style.label}
           </span>
           <button
             onClick={handleCopy}
-            className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded px-2 py-0.5 transition-colors"
+            className="text-xs px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all font-inter font-medium whitespace-nowrap"
           >
-            {copied ? "Copied!" : "Copy"}
+            {copied ? "✓ Copied" : "Copy"}
           </button>
         </div>
       </div>
-      <p className="text-sm text-gray-700 leading-relaxed">{comment.comment}</p>
     </div>
   );
 }
@@ -63,7 +104,6 @@ export default function PRReviewer() {
   const [filter, setFilter] = useState<"all" | Severity>("all");
   const [currentToken, setCurrentToken] = useState<string | null>(null);
 
-  // Load token on mount and when TokenManager changes it
   useEffect(() => {
     const token = getStoredToken();
     setCurrentToken(token);
@@ -78,7 +118,14 @@ export default function PRReviewer() {
     setResult(null);
 
     if (!currentToken) {
-      setError("GitHub token is not set. Please add your token using the Token Manager above.");
+      setError(
+        "GitHub token is required. Please add your token using the Token Manager above."
+      );
+      return;
+    }
+
+    if (!prUrl.trim()) {
+      setError("Please enter a valid GitHub PR URL");
       return;
     }
 
@@ -86,7 +133,7 @@ export default function PRReviewer() {
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-GitHub-Token": currentToken,
         },
@@ -102,108 +149,212 @@ export default function PRReviewer() {
     }
   };
 
-  const filtered = result?.comments.filter(
-    (c) => filter === "all" || c.severity === filter
-  ) ?? [];
+  const filtered =
+    result?.comments.filter(
+      (c) => filter === "all" || c.severity === filter
+    ) ?? [];
 
   const counts = result
     ? {
         total: result.comments.length,
         error: result.comments.filter((c) => c.severity === "error").length,
         warning: result.comments.filter((c) => c.severity === "warning").length,
-        suggestion: result.comments.filter((c) => c.severity === "suggestion").length,
+        suggestion: result.comments.filter((c) => c.severity === "suggestion")
+          .length,
       }
     : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="min-h-screen bg-black font-inter relative overflow-hidden selection-red">
+      {/* Background Effects */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1a0505] to-black"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-600/5 rounded-full blur-[120px]"></div>
+        <div className="absolute inset-0 grid-bg [mask-image:radial-gradient(circle_at_center,black_40%,transparent_80%)]"></div>
+      </div>
+
+      <div className="relative z-10 min-h-screen flex flex-col">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">PR Code Reviewer</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Analyze GitHub pull requests with AI. Review comments are for manual use only.
-          </p>
-        </div>
-
-        {/* Token Manager */}
-        <TokenManager onTokenChange={handleTokenChange} />
-
-        {/* Input Form */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4 shadow-sm">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Pull Request URL
-            </label>
-            <input
-              type="url"
-              value={prUrl}
-              onChange={(e) => setPrUrl(e.target.value)}
-              placeholder="https://github.com/owner/repo/pull/123"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+        <header className="border-b border-white/5 bg-black/40 backdrop-blur-xl sticky top-0 z-40">
+          <div className="max-w-4xl mx-auto px-4 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-red-600 to-red-400 rounded-lg transform -rotate-45 flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">◆</span>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold font-manrope text-white">
+                    Agentic Code Reviewer
+                  </h1>
+                  <p className="text-xs text-zinc-500 font-inter">
+                    AI-Powered PR Analysis
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <button
-            onClick={handleAnalyze}
-            disabled={loading || !prUrl}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2 rounded-lg text-sm transition-colors"
-          >
-            {loading ? "Analyzing..." : "Analyze PR"}
-          </button>
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </p>
+        </header>
+
+        {/* Main Content */}
+        <main className="max-w-4xl mx-auto w-full px-4 py-12 flex-1">
+          {/* Token Manager */}
+          <TokenManager onTokenChange={handleTokenChange} />
+
+          {/* Input Form */}
+          <div className="card-glass rounded-xl p-8 mb-8 animate-fade-up">
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-white mb-3 font-inter">
+                🔗 Pull Request URL
+              </label>
+              <div className="relative">
+                <input
+                  type="url"
+                  value={prUrl}
+                  onChange={(e) => setPrUrl(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && handleAnalyze()}
+                  placeholder="https://github.com/owner/repo/pull/123"
+                  className="w-full bg-zinc-900/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-red-500 transition-colors font-inter placeholder:text-zinc-600"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-300 font-inter">
+                <span className="font-semibold">⚠️ Error:</span> {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleAnalyze}
+              disabled={loading || !prUrl}
+              className="shiny-cta w-full group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="relative z-10 flex items-center justify-center gap-2 text-white font-semibold font-inter">
+                {loading ? (
+                  <>
+                    <span className="inline-block animate-spin">⚙️</span>
+                    Analyzing PR...
+                  </>
+                ) : (
+                  <>
+                    Analyze Pull Request
+                    <span className="transition-transform group-hover:translate-x-1">
+                      →
+                    </span>
+                  </>
+                )}
+              </span>
+            </button>
+          </div>
+
+          {/* Results */}
+          {result && (
+            <div className="space-y-8 animate-fade-up">
+              {/* PR Info */}
+              <div className="card-glass rounded-xl p-6">
+                <h2 className="text-xl font-semibold text-white mb-2 font-manrope">
+                  {result.prTitle}
+                </h2>
+                <a
+                  href={result.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-red-400 hover:text-red-300 transition-colors font-inter"
+                >
+                  {result.prUrl} ↗️
+                </a>
+              </div>
+
+              {/* Summary Stats */}
+              {counts && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <SummaryCard label="Total Issues" count={counts.total} icon="📊" />
+                  <SummaryCard label="Errors" count={counts.error} icon="🔴" />
+                  <SummaryCard label="Warnings" count={counts.warning} icon="🟡" />
+                  <SummaryCard label="Suggestions" count={counts.suggestion} icon="🔵" />
+                </div>
+              )}
+
+              {/* Filter Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide font-inter self-center">
+                  Filter:
+                </span>
+                <button
+                  onClick={() => setFilter("all")}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
+                    filter === "all"
+                      ? "bg-red-500/30 text-red-300 border border-red-500/50 card-glass-accent"
+                      : "card-glass"
+                  }`}
+                >
+                  All ({result.comments.length})
+                </button>
+                <button
+                  onClick={() => setFilter("error")}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
+                    filter === "error"
+                      ? "bg-red-500/30 text-red-300 border border-red-500/50 card-glass-accent"
+                      : "card-glass"
+                  }`}
+                >
+                  Errors (
+                  {result.comments.filter((c) => c.severity === "error").length})
+                </button>
+                <button
+                  onClick={() => setFilter("warning")}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
+                    filter === "warning"
+                      ? "bg-yellow-500/30 text-yellow-300 border border-yellow-500/50"
+                      : "card-glass"
+                  }`}
+                >
+                  Warnings (
+                  {result.comments.filter((c) => c.severity === "warning").length})
+                </button>
+                <button
+                  onClick={() => setFilter("suggestion")}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
+                    filter === "suggestion"
+                      ? "bg-blue-500/30 text-blue-300 border border-blue-500/50"
+                      : "card-glass"
+                  }`}
+                >
+                  Suggestions (
+                  {
+                    result.comments.filter((c) => c.severity === "suggestion")
+                      .length
+                  }
+                  )
+                </button>
+              </div>
+
+              {/* Comments */}
+              <div className="space-y-4">
+                {filtered.length === 0 ? (
+                  <div className="card-glass rounded-xl p-12 text-center">
+                    <span className="text-4xl mb-4 block">🎉</span>
+                    <p className="text-zinc-400 font-inter">
+                      No issues found for this filter.
+                    </p>
+                  </div>
+                ) : (
+                  filtered.map((c, i) => <CommentCard key={i} comment={c} />)
+                )}
+              </div>
+            </div>
           )}
-        </div>
+        </main>
 
-        {/* Results */}
-        {result && (
-          <div className="space-y-4">
-            <div>
-              <h2 className="font-semibold text-gray-800 text-sm">{result.prTitle}</h2>
-              <a href={result.prUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
-                {result.prUrl}
-              </a>
-            </div>
-
-            {/* Summary Cards */}
-            {counts && (
-              <div className="flex gap-3 flex-wrap">
-                <SummaryCard label="Total" count={counts.total} color="border-gray-200" />
-                <SummaryCard label="Errors" count={counts.error} color="border-red-200 bg-red-50" />
-                <SummaryCard label="Warnings" count={counts.warning} color="border-yellow-200 bg-yellow-50" />
-                <SummaryCard label="Suggestions" count={counts.suggestion} color="border-blue-200 bg-blue-50" />
-              </div>
-            )}
-
-            {/* Filter */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">Filter:</label>
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value as "all" | Severity)}
-                className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All</option>
-                <option value="error">Errors only</option>
-                <option value="warning">Warnings only</option>
-                <option value="suggestion">Suggestions only</option>
-              </select>
-            </div>
-
-            {/* Comment Cards */}
-            {filtered.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-8">No comments for this filter.</p>
-            ) : (
-              <div className="space-y-3">
-                {filtered.map((c, i) => (
-                  <CommentCard key={i} comment={c} />
-                ))}
-              </div>
-            )}
+        {/* Footer */}
+        <footer className="border-t border-white/5 bg-black/40 backdrop-blur-xl mt-12">
+          <div className="max-w-4xl mx-auto px-4 py-8 text-center text-xs text-zinc-500 font-inter">
+            <p>
+              Powered by GPT-4o with Advanced Code Analysis • Token encrypted &
+              stored locally
+            </p>
           </div>
-        )}
+        </footer>
       </div>
     </div>
   );

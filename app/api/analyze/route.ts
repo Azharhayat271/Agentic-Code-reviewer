@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchPRFiles, fetchPRTitle, fetchFileContent, parsePRUrl } from "@/lib/github";
+import { fetchPRFiles, fetchPRTitle, fetchPRDetails, fetchFileContent, parsePRUrl } from "@/lib/github";
 import { orchestrateCodeReview, FileToAnalyze } from "@/lib/agentOrchestrator";
 
 export async function POST(req: NextRequest) {
@@ -42,10 +42,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid GitHub PR URL" }, { status: 400 });
     }
 
-    const [files, prTitle] = await Promise.all([
+    const [files, prDetails] = await Promise.all([
       fetchPRFiles(githubToken, prInfo),
-      fetchPRTitle(githubToken, prInfo),
+      fetchPRDetails(githubToken, prInfo),
     ]);
+    const { title: prTitle, headSha } = prDetails;
 
     const relevantFiles = files.filter(
       (f) => f.patch && /\.(js|jsx|ts|tsx|mjs|cjs)$/.test(f.filename)
@@ -62,42 +63,26 @@ export async function POST(req: NextRequest) {
 
     console.log("[analyze] Found", relevantFiles.length, "relevant files");
 
-    // Fetch full content for each file for agent analysis
-    const filesToAnalyze: FileToAnalyze[] = [];
-
-    for (const file of relevantFiles) {
-      try {
-        const content = await fetchFileContent(
-          githubToken,
-          prInfo.owner,
-          prInfo.repo,
-          file.filename,
-          "HEAD"
-        );
-        
+    // Use patches (diffs) instead of full file content - they're 100x smaller!
+    // This prevents token limit issues
+    const filesToAnalyze: FileToAnalyze[] = relevantFiles
+      .filter((f) => f.patch) // Only files with changes
+      .map((file) => {
         // Detect language
         let language: "typescript" | "javascript" | "jsx" | "tsx" = "javascript";
         if (file.filename.endsWith(".tsx")) language = "tsx";
         else if (file.filename.endsWith(".ts")) language = "typescript";
         else if (file.filename.endsWith(".jsx")) language = "jsx";
 
-        filesToAnalyze.push({
+        return {
           filename: file.filename,
           patch: file.patch,
-          content,
+          content: file.patch, // Use patch as content - much faster and smaller
           language,
-        });
-      } catch (error) {
-        console.warn(`[analyze] Failed to fetch content for ${file.filename}:`, error);
-        // Continue with other files even if one fails
-        filesToAnalyze.push({
-          filename: file.filename,
-          patch: file.patch,
-          content: "", // Empty content will be handled by orchestrator
-        });
-      }
-    }
+        };
+      });
 
+    console.log("[analyze] Prepared", filesToAnalyze.length, "files for analysis");
     console.log("[analyze] Starting agent orchestration...");
 
     // Run the agentic code review

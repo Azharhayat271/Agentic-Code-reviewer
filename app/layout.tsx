@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PR Code Reviewer",
-  description: "Analyze GitHub PRs with Gemini AI",
+  title: "Agentic Code Reviewer",
+  description: "AI-powered GitHub PR analysis with agentic code review system",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="selection-red">{children}</body>
     </html>
   );
 }
