@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ReviewComment, ReviewResult, Severity } from "@/types";
+import { getStoredToken } from "@/lib/encryption";
+import TokenManager from "@/components/TokenManager";
 
 const SEVERITY_STYLES: Record<Severity, { badge: string; border: string; label: string }> = {
   error: { badge: "bg-red-100 text-red-700 border border-red-200", border: "border-l-red-500", label: "Error" },
@@ -59,15 +61,35 @@ export default function PRReviewer() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<ReviewResult | null>(null);
   const [filter, setFilter] = useState<"all" | Severity>("all");
+  const [currentToken, setCurrentToken] = useState<string | null>(null);
+
+  // Load token on mount and when TokenManager changes it
+  useEffect(() => {
+    const token = getStoredToken();
+    setCurrentToken(token);
+  }, []);
+
+  const handleTokenChange = (token: string | null) => {
+    setCurrentToken(token);
+  };
 
   const handleAnalyze = async () => {
     setError("");
     setResult(null);
+
+    if (!currentToken) {
+      setError("GitHub token is not set. Please add your token using the Token Manager above.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-GitHub-Token": currentToken,
+        },
         body: JSON.stringify({ prUrl }),
       });
       const data = await res.json();
@@ -100,9 +122,12 @@ export default function PRReviewer() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">PR Code Reviewer</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Analyze GitHub pull requests with Gemini AI. Review comments are for manual use only.
+            Analyze GitHub pull requests with AI. Review comments are for manual use only.
           </p>
         </div>
+
+        {/* Token Manager */}
+        <TokenManager onTokenChange={handleTokenChange} />
 
         {/* Input Form */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4 shadow-sm">
