@@ -1,56 +1,64 @@
-# Agentic Code Reviewer
+# PR Reviewer
 
-AI-powered GitHub PR code review analyzer using OpenAI GPT-4o-mini.
+AI-powered GitHub PR analysis with agentic code review system using GPT-4o.
 
-## Features
+## Quick Start
 
-- 🔍 Analyzes JavaScript/TypeScript code changes in GitHub PRs
-- 🤖 Uses OpenAI GPT-4o-mini for intelligent code review
-- 🎯 Categorizes issues by severity (error, warning, suggestion)
-- 📊 Real-time summary cards with filterable results
-- 📋 One-click copy for manual PR comments
-- 🔒 Secure server-side API key management
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
 
 ## Setup
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+1. Copy `.env.local.example` to `.env.local`
+2. Add your OpenAI API key:
 
-3. Create `.env.local` with your API keys:
-   ```
-   OPENAI_API_KEY=sk-...
-   GH_PAT_TOKEN=ghp_...
-   ```
+```env
+OPENAI_API_KEY=sk-...
+```
 
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
+3. Add your GitHub token in the browser UI (encrypted locally, never sent to server)
 
-5. Open [http://localhost:3000](http://localhost:3000)
+## Features
+
+- 🤖 Agentic code review with specialized analysis agents
+- 🔍 Multi-agent system: Coordinator, Security, Performance, Best Practices
+- 🎯 Intelligent issue categorization (error, warning, suggestion)
+- 🔒 Client-side encrypted token storage (browser only)
+- 📊 Real-time analysis with filterable results
+- 📋 One-click copy for PR comments
 
 ## Usage
 
-1. Enter a GitHub PR URL (e.g., `https://github.com/owner/repo/pull/123`)
-2. Click "Analyze PR"
-3. Review the generated comments
-4. Copy and manually post comments you want to use
+1. Add your GitHub token using the Token Manager (stored encrypted in browser)
+2. Enter a GitHub PR URL
+3. Click "Analyze Pull Request"
+4. Review AI-generated feedback from multiple specialized agents
+5. Filter by severity and copy comments to post
+
+## Contributing
+
+We welcome contributions!
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/amazing`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing`)
+5. Open a Pull Request
+
+### Guidelines
+
+- Keep code clean and minimal
+- Follow the Midnight Editorial design system
+- Test your changes locally
+- Update docs if needed
 
 ## Tech Stack
 
-- Next.js 16 (App Router)
-- TypeScript
-- Tailwind CSS
-- OpenAI API (GPT-4o-mini)
-- GitHub REST API
-
-## Environment Variables
-
-- `OPENAI_API_KEY` - Your OpenAI API key
-- `GH_PAT_TOKEN` - GitHub Personal Access Token with `repo` scope
+Next.js 16 • TypeScript • Tailwind CSS • OpenAI API • GitHub API
 
 ## License
 

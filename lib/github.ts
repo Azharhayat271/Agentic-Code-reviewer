@@ -46,3 +46,66 @@ export async function fetchPRTitle(
   const data = await res.json();
   return (data as { title: string }).title;
 }
+
+/**
+ * Fetch PR details including title and head ref (branch/commit)
+ */
+export async function fetchPRDetails(
+  token: string,
+  { owner, repo, number }: PRInfo
+): Promise<{ title: string; headRef: string; headSha: string }> {
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls/${number}`,
+    {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+    }
+  );
+  if (!res.ok) {
+    return {
+      title: `PR #${number}`,
+      headRef: "HEAD",
+      headSha: "HEAD",
+    };
+  }
+  const data = await res.json() as {
+    title: string;
+    head: { ref: string; sha: string };
+  };
+  return {
+    title: data.title,
+    headRef: data.head.ref,
+    headSha: data.head.sha,
+  };
+}
+
+/**
+ * Fetch the full content of a file from a specific commit/branch
+ * Used by agent to analyze complete file content
+ */
+export async function fetchFileContent(
+  token: string,
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string = "HEAD"
+): Promise<string> {
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${ref}`,
+    {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: "application/vnd.github.raw",
+      },
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { message?: string }).message || `Failed to fetch file: ${path}`
+    );
+  }
+  return res.text();
+}
