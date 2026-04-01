@@ -74,22 +74,22 @@ export default function TokenManager({ onTokenChange }: TokenManagerProps) {
   };
 
   if (loading) {
-    return <div className="text-zinc-400 text-sm font-inter">Loading...</div>;
+    return <div className="text-[#666666] text-sm font-inter">Loading...</div>;
   }
 
   return (
-    <div className="card-glass card-glass-accent rounded-xl p-6 mb-6 animate-fade-up">
+    <div className="card-glass rounded-2xl p-6 border border-[#FF6B50]/20 animate-fade-up">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full" style={{ background: hasToken ? '#10b981' : '#ef233c' }}></div>
+          <div className="w-2.5 h-2.5 rounded-full" style={{ background: hasToken ? '#10b981' : '#FF6B50' }}></div>
           <span className="font-inter text-sm font-medium text-white">GitHub Token</span>
           {hasToken && (
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30">
-              ✓ Encrypted & Stored
+            <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-green-500/10 text-green-300 border border-green-500/20 uppercase tracking-wider">
+              ✓ Stored
             </span>
           )}
           {!hasToken && !showInput && (
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
+            <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-[#FF6B50]/10 text-[#FF6B50] border border-[#FF6B50]/20 uppercase tracking-wider">
               ✗ Not Set
             </span>
           )}
@@ -100,13 +100,13 @@ export default function TokenManager({ onTokenChange }: TokenManagerProps) {
             <>
               <button
                 onClick={handleEditToken}
-                className="px-3 py-1.5 text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all"
+                className="px-4 py-2 text-xs font-bold bg-[#1a1a1a] text-[#888888] hover:text-white border border-[#333333] rounded-lg hover:bg-[#222222] transition-all uppercase tracking-wider"
               >
                 Edit
               </button>
               <button
                 onClick={handleDeleteToken}
-                className="px-3 py-1.5 text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all"
+                className="px-4 py-2 text-xs font-bold bg-[#1a1a1a] text-[#888888] hover:text-white border border-[#333333] rounded-lg hover:bg-[#222222] transition-all uppercase tracking-wider"
               >
                 Delete
               </button>
@@ -115,7 +115,7 @@ export default function TokenManager({ onTokenChange }: TokenManagerProps) {
           {!hasToken && !showInput && (
             <button
               onClick={() => setShowInput(true)}
-              className="px-3 py-1.5 text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-all"
+              className="px-4 py-2 text-xs font-bold bg-[#FF6B50] text-black rounded-lg hover:bg-[#E55A40] transition-all uppercase tracking-wider"
             >
               Add Token
             </button>
@@ -124,9 +124,9 @@ export default function TokenManager({ onTokenChange }: TokenManagerProps) {
       </div>
 
       {showInput && (
-        <div className="mt-4 space-y-3 animate-fade-up">
+        <div className="mt-6 space-y-4 animate-fade-up">
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-2 font-inter">
+            <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-[#666666] mb-3 font-inter">
               GitHub Personal Access Token
             </label>
             <input
@@ -135,30 +135,30 @@ export default function TokenManager({ onTokenChange }: TokenManagerProps) {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="ghp_..."
-              className="w-full bg-zinc-900/50 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-red-500 transition-colors font-inter placeholder:text-zinc-600"
+              className="w-full bg-[#0a0a0a] border border-[#333333] rounded-xl px-5 py-3 text-white text-sm focus:outline-none focus:border-[#FF6B50] transition-colors font-inter placeholder:text-[#444444]"
               autoFocus
             />
-            <p className="text-xs text-zinc-500 mt-2 font-inter">
+            <p className="text-xs text-[#666666] mt-3 font-inter">
               🔒 Token is encrypted locally in your browser. Never sent to any server except GitHub API.
             </p>
           </div>
 
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300 font-inter">
+            <div className="p-4 bg-red-500/5 border border-red-500/20 rounded-xl text-xs text-red-300 font-inter">
               {error}
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <button
               onClick={handleAddToken}
-              className="flex-1 py-2.5 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-all font-inter"
+              className="flex-1 py-3 px-5 text-xs font-bold bg-[#FF6B50] hover:bg-[#E55A40] text-black rounded-xl transition-all font-inter uppercase tracking-wider"
             >
               Save Token
             </button>
             <button
               onClick={handleCancel}
-              className="px-4 py-2.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg font-semibold transition-all font-inter"
+              className="px-5 py-3 text-xs font-bold bg-[#1a1a1a] hover:bg-[#222222] text-[#888888] hover:text-white border border-[#333333] rounded-xl transition-all font-inter uppercase tracking-wider"
             >
               Cancel
             </button>

@@ -7,25 +7,22 @@ import TokenManager from "@/components/TokenManager";
 
 const SEVERITY_COLORS: Record<
   Severity,
-  { badge: string; icon: string; label: string; bg: string }
+  { badge: string; icon: string; label: string }
 > = {
   error: {
-    badge: "bg-red-500/20 text-red-300 border-red-500/30",
+    badge: "bg-red-500/10 text-red-300 border-red-500/20",
     icon: "⚠️",
     label: "Error",
-    bg: "bg-red-500/5",
   },
   warning: {
-    badge: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+    badge: "bg-yellow-500/10 text-yellow-300 border-yellow-500/20",
     icon: "⚡",
     label: "Warning",
-    bg: "bg-yellow-500/5",
   },
   suggestion: {
-    badge: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+    badge: "bg-blue-500/10 text-blue-300 border-blue-500/20",
     icon: "💡",
     label: "Suggestion",
-    bg: "bg-blue-500/5",
   },
 };
 
@@ -39,10 +36,10 @@ function SummaryCard({
   icon: string;
 }) {
   return (
-    <div className="card-glass rounded-xl p-6 flex flex-col items-center gap-3 min-w-[140px]">
-      <span className="text-3xl">{icon}</span>
-      <span className="text-4xl font-bold font-manrope">{count}</span>
-      <span className="text-xs text-zinc-400 font-inter uppercase tracking-wide">
+    <div className="card-glass rounded-2xl p-8 flex flex-col items-center gap-3 hover:bg-[#161616] transition-all duration-300">
+      <span className="text-4xl opacity-80">{icon}</span>
+      <span className="text-5xl font-bold font-satoshi tracking-tight">{count}</span>
+      <span className="text-[10px] text-[#666666] font-inter uppercase tracking-[0.2em] font-bold">
         {label}
       </span>
     </div>
@@ -61,34 +58,33 @@ function CommentCard({ comment }: { comment: ReviewComment }) {
   };
 
   return (
-    <div
-      className={`card-glass rounded-xl p-5 flex flex-col gap-3 border-l-4 transition-all ${style.bg} border-l-red-500/50 hover:border-l-red-500`}
-    >
-      <div className="flex items-start justify-between gap-3">
+    <div className="card-glass rounded-2xl p-6 flex flex-col gap-4 hover:bg-[#161616] transition-all duration-300 group">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-3 mb-3">
             <span className="font-mono text-sm font-semibold text-white">
               {comment.file}
             </span>
-            <span className="text-zinc-500 text-sm font-inter">
+            <span className="text-[#666666] text-xs font-inter">
               :{comment.line}
             </span>
           </div>
-          <p className="text-sm text-zinc-300 leading-relaxed font-inter">
+          <p className="text-sm text-[#888888] leading-relaxed font-inter">
             {comment.comment}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <span
-            className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${style.badge} font-inter`}
+            className={`text-[10px] font-bold px-3 py-1.5 rounded-full border ${style.badge} font-inter uppercase tracking-wider`}
           >
             {style.icon} {style.label}
           </span>
           <button
             onClick={handleCopy}
-            className="text-xs px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all font-inter font-medium whitespace-nowrap"
+            className="p-2.5 rounded-lg bg-[#1a1a1a] hover:bg-white hover:text-black border border-[#333333] transition-all duration-300"
+            title="Copy comment"
           >
-            {copied ? "✓ Copied" : "Copy"}
+            <span className="text-base">{copied ? "✓" : "📋"}</span>
           </button>
         </div>
       </div>
@@ -165,46 +161,58 @@ export default function PRReviewer() {
     : null;
 
   return (
-    <div className="min-h-screen bg-black font-inter relative overflow-hidden selection-red">
+    <div className="min-h-screen bg-[#050505] font-satoshi relative overflow-hidden selection-coral">
       {/* Background Effects */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#1a0505] to-black"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-red-600/5 rounded-full blur-[120px]"></div>
-        <div className="absolute inset-0 grid-bg [mask-image:radial-gradient(circle_at_center,black_40%,transparent_80%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a1a1a_0%,_#050505_70%)] opacity-60"></div>
       </div>
 
       <div className="relative z-10 min-h-screen flex flex-col">
-        {/* Header */}
-        <header className="border-b border-white/5 bg-black/40 backdrop-blur-xl sticky top-0 z-40">
-          <div className="max-w-4xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-red-600 to-red-400 rounded-lg transform -rotate-45 flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">◆</span>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold font-manrope text-white">
-                    Agentic Code Reviewer
-                  </h1>
-                  <p className="text-xs text-zinc-500 font-inter">
-                    AI-Powered PR Analysis
-                  </p>
-                </div>
+        {/* Top Navigation */}
+        <nav className="fixed top-0 left-0 right-0 z-[100] px-6 py-6 flex items-center justify-between text-sm font-medium tracking-tight">
+          <div className="flex items-center gap-10">
+            <a href="/" className="flex items-center group">
+              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-black font-extrabold text-xl transition-transform group-hover:rotate-12">
+                PR
               </div>
+            </a>
+            <div className="hidden lg:flex items-center gap-8 text-[#888888]">
+              <span className="text-white font-semibold">Code Reviewer</span>
             </div>
+          </div>
+        </nav>
+
+        {/* Hero Section */}
+        <header className="relative pt-32 pb-20 px-6 md:px-12">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-2 h-2 rounded-full bg-[#FF6B50] animate-pulse"></div>
+              <span className="text-[10px] font-bold tracking-[0.3em] text-[#666666] uppercase">
+                AI-Powered Code Analysis
+              </span>
+            </div>
+            <h1 className="text-6xl md:text-8xl font-bold leading-[0.95] tracking-tighter text-white mb-6">
+              Review PRs<br />
+              <span className="text-[#666666]">with AI</span>
+            </h1>
+            <p className="text-lg text-[#888888] max-w-2xl font-inter">
+              Automated code review powered by GPT-4o. Get instant feedback on pull requests with intelligent analysis.
+            </p>
           </div>
         </header>
 
         {/* Main Content */}
-        <main className="max-w-4xl mx-auto w-full px-4 py-12 flex-1">
+        <main className="max-w-6xl mx-auto w-full px-6 md:px-12 pb-20">
           {/* Token Manager */}
-          <TokenManager onTokenChange={handleTokenChange} />
+          <div className="mb-12">
+            <TokenManager onTokenChange={handleTokenChange} />
+          </div>
 
           {/* Input Form */}
-          <div className="card-glass rounded-xl p-8 mb-8 animate-fade-up">
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-white mb-3 font-inter">
-                🔗 Pull Request URL
+          <div className="card-glass rounded-[2.5rem] p-10 mb-12 animate-fade-up">
+            <div className="mb-8">
+              <label className="block text-xs font-bold tracking-[0.2em] uppercase text-[#666666] mb-4 font-inter">
+                Pull Request URL
               </label>
               <div className="relative">
                 <input
@@ -213,13 +221,13 @@ export default function PRReviewer() {
                   onChange={(e) => setPrUrl(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && handleAnalyze()}
                   placeholder="https://github.com/owner/repo/pull/123"
-                  className="w-full bg-zinc-900/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-red-500 transition-colors font-inter placeholder:text-zinc-600"
+                  className="w-full bg-[#0a0a0a] border border-[#333333] rounded-xl px-6 py-4 text-white text-base focus:outline-none focus:border-[#FF6B50] transition-colors font-inter placeholder:text-[#444444]"
                 />
               </div>
             </div>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-300 font-inter">
+              <div className="mb-8 p-5 bg-red-500/5 border border-red-500/20 rounded-xl text-sm text-red-300 font-inter">
                 <span className="font-semibold">⚠️ Error:</span> {error}
               </div>
             )}
@@ -227,114 +235,89 @@ export default function PRReviewer() {
             <button
               onClick={handleAnalyze}
               disabled={loading || !prUrl}
-              className="shiny-cta w-full group disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
             >
-              <span className="relative z-10 flex items-center justify-center gap-2 text-white font-semibold font-inter">
-                {loading ? (
-                  <>
-                    <span className="inline-block animate-spin">⚙️</span>
-                    Analyzing PR...
-                  </>
-                ) : (
-                  <>
-                    Analyze Pull Request
-                    <span className="transition-transform group-hover:translate-x-1">
-                      →
-                    </span>
-                  </>
-                )}
-              </span>
+              {loading ? (
+                <>
+                  <span className="inline-block animate-spin">⚙️</span>
+                  Analyzing PR...
+                </>
+              ) : (
+                <>
+                  Analyze Pull Request
+                  <span className="text-xl">→</span>
+                </>
+              )}
             </button>
           </div>
 
           {/* Results */}
           {result && (
-            <div className="space-y-8 animate-fade-up">
+            <div className="space-y-12 animate-fade-up">
               {/* PR Info */}
-              <div className="card-glass rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-white mb-2 font-manrope">
+              <div className="card-glass rounded-2xl p-8">
+                <h2 className="text-2xl font-semibold text-white mb-3 font-satoshi tracking-tight">
                   {result.prTitle}
                 </h2>
                 <a
                   href={result.prUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-red-400 hover:text-red-300 transition-colors font-inter"
+                  className="text-sm text-[#FF6B50] hover:text-white transition-colors font-inter inline-flex items-center gap-2"
                 >
-                  {result.prUrl} ↗️
+                  View on GitHub
+                  <span className="text-base">↗</span>
                 </a>
               </div>
 
               {/* Summary Stats */}
               {counts && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <SummaryCard label="Total Issues" count={counts.total} icon="📊" />
-                  <SummaryCard label="Errors" count={counts.error} icon="🔴" />
-                  <SummaryCard label="Warnings" count={counts.warning} icon="🟡" />
-                  <SummaryCard label="Suggestions" count={counts.suggestion} icon="🔵" />
+                <div>
+                  <div className="flex justify-between items-end mb-8 border-b border-[#222222] pb-6">
+                    <h2 className="text-xs font-bold tracking-[0.4em] uppercase text-[#FF6B50]">
+                      Analysis Summary
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <SummaryCard label="Total Issues" count={counts.total} icon="📊" />
+                    <SummaryCard label="Errors" count={counts.error} icon="🔴" />
+                    <SummaryCard label="Warnings" count={counts.warning} icon="🟡" />
+                    <SummaryCard label="Suggestions" count={counts.suggestion} icon="🔵" />
+                  </div>
                 </div>
               )}
 
               {/* Filter Buttons */}
-              <div className="flex flex-wrap gap-2">
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide font-inter self-center">
+              <div className="flex flex-wrap gap-3">
+                <span className="text-[10px] font-bold text-[#666666] uppercase tracking-[0.2em] font-inter self-center">
                   Filter:
                 </span>
-                <button
-                  onClick={() => setFilter("all")}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
-                    filter === "all"
-                      ? "bg-red-500/30 text-red-300 border border-red-500/50 card-glass-accent"
-                      : "card-glass"
-                  }`}
-                >
-                  All ({result.comments.length})
-                </button>
-                <button
-                  onClick={() => setFilter("error")}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
-                    filter === "error"
-                      ? "bg-red-500/30 text-red-300 border border-red-500/50 card-glass-accent"
-                      : "card-glass"
-                  }`}
-                >
-                  Errors (
-                  {result.comments.filter((c) => c.severity === "error").length})
-                </button>
-                <button
-                  onClick={() => setFilter("warning")}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
-                    filter === "warning"
-                      ? "bg-yellow-500/30 text-yellow-300 border border-yellow-500/50"
-                      : "card-glass"
-                  }`}
-                >
-                  Warnings (
-                  {result.comments.filter((c) => c.severity === "warning").length})
-                </button>
-                <button
-                  onClick={() => setFilter("suggestion")}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all font-inter ${
-                    filter === "suggestion"
-                      ? "bg-blue-500/30 text-blue-300 border border-blue-500/50"
-                      : "card-glass"
-                  }`}
-                >
-                  Suggestions (
-                  {
-                    result.comments.filter((c) => c.severity === "suggestion")
-                      .length
-                  }
-                  )
-                </button>
+                {[
+                  { key: "all", label: "All", count: result.comments.length },
+                  { key: "error", label: "Errors", count: result.comments.filter((c) => c.severity === "error").length },
+                  { key: "warning", label: "Warnings", count: result.comments.filter((c) => c.severity === "warning").length },
+                  { key: "suggestion", label: "Suggestions", count: result.comments.filter((c) => c.severity === "suggestion").length },
+                ].map(({ key, label, count }) => (
+                  <button
+                    key={key}
+                    onClick={() => setFilter(key as typeof filter)}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 font-inter uppercase tracking-wider ${
+                      filter === key
+                        ? "bg-[#FF6B50] text-black"
+                        : "bg-[#1a1a1a] text-[#888888] hover:bg-[#222222] hover:text-white border border-[#333333]"
+                    }`}
+                  >
+                    {label} ({count})
+                  </button>
+                ))}
               </div>
 
               {/* Comments */}
               <div className="space-y-4">
                 {filtered.length === 0 ? (
-                  <div className="card-glass rounded-xl p-12 text-center">
-                    <span className="text-4xl mb-4 block">🎉</span>
-                    <p className="text-zinc-400 font-inter">
+                  <div className="card-glass rounded-2xl p-16 text-center">
+                    <span className="text-6xl mb-6 block opacity-50">🎉</span>
+                    <p className="text-[#666666] font-inter text-lg">
                       No issues found for this filter.
                     </p>
                   </div>
@@ -347,12 +330,9 @@ export default function PRReviewer() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-white/5 bg-black/40 backdrop-blur-xl mt-12">
-          <div className="max-w-4xl mx-auto px-4 py-8 text-center text-xs text-zinc-500 font-inter">
-            <p>
-              Powered by GPT-4o with Advanced Code Analysis • Token encrypted &
-              stored locally
-            </p>
+        <footer className="relative pt-20 pb-12 px-6 md:px-12 border-t border-[#1a1a1a] mt-auto">
+          <div className="max-w-6xl mx-auto text-center text-[10px] text-[#333333] font-inter font-bold uppercase tracking-widest">
+            <p>&copy; 2024 PR Reviewer. Powered by GPT-4o • Token encrypted & stored locally</p>
           </div>
         </footer>
       </div>
