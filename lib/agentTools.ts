@@ -204,4 +204,5 @@ export const severityWeight: Record<Severity, number> = {
   error: 3,
   warning: 2,
   suggestion: 1,
+  improvement: 0,
 };

@@ -117,6 +117,91 @@ export async function analyzeFile(
     });
   }
 
+  // 8. Check for magic numbers (hardcoded numbers that should be constants)
+  lines.forEach((line, idx) => {
+    const lineNum = idx + 1;
+    // Detect patterns like = 100, > 50, === 3, etc.
+    if (/[=<>!]=?\s*-?\d{2,}|[^a-zA-Z0-9_]-\d{2,}[^a-zA-Z0-9_]/.test(line) && !line.includes("//")) {
+      // Avoid common cases like line numbers in logs or version
+      if (!line.includes("version") && !line.includes("port") && !line.includes("timeout")) {
+        findings.push({
+          line: lineNum,
+          severity: "improvement",
+          issue:
+            "Magic number detected. Extract to named constant for clarity and maintainability.",
+        });
+      }
+    }
+  });
+
+  // 9. Check for deeply nested conditionals (3+ levels)
+  const nestedConditionalLines: Set<number> = new Set();
+  lines.forEach((line, idx) => {
+    const depth = (line.match(/(\{|\()/g) || []).length - (line.match(/(\}|\))/g) || []).length;
+    if (depth > 3) {
+      nestedConditionalLines.add(idx + 1);
+    }
+  });
+  nestedConditionalLines.forEach((lineNum) => {
+    findings.push({
+      line: lineNum,
+      severity: "improvement",
+      issue: "Deeply nested code (3+ levels). Consider extracting to separate functions for readability.",
+    });
+  });
+
+  // 10. Check for long functions (50+ lines in a single function)
+  let currentFunctionStart = -1;
+  let currentFunctionLines = 0;
+  let braceDepth = 0;
+  lines.forEach((line, idx) => {
+    const lineNum = idx + 1;
+    braceDepth += (line.match(/\{/g) || []).length;
+    braceDepth -= (line.match(/\}/g) || []).length;
+
+    if (
+      /function\s+\w+\s*\(|const\s+\w+\s*=\s*\(|=>\s*\{/.test(line) &&
+      line.includes("{")
+    ) {
+      currentFunctionStart = lineNum;
+      currentFunctionLines = 0;
+    }
+
+    if (currentFunctionStart > 0) {
+      currentFunctionLines++;
+      if (currentFunctionLines > 50 && braceDepth === 0) {
+        findings.push({
+          line: currentFunctionStart,
+          severity: "improvement",
+          issue:
+            "Function is quite long (50+ lines). Consider breaking it into smaller, focused functions.",
+        });
+        currentFunctionStart = -1;
+      }
+    }
+  });
+
+  // 11. Check for duplicate similar code patterns
+  const codeSignatures = new Map<string, number[]>();
+  lines.forEach((line, idx) => {
+    const sig = line.trim().slice(0, 30); // Use first 30 chars as signature
+    if (sig.length > 15 && !line.trim().startsWith("//")) {
+      if (!codeSignatures.has(sig)) {
+        codeSignatures.set(sig, []);
+      }
+      codeSignatures.get(sig)!.push(idx + 1);
+    }
+  });
+  codeSignatures.forEach((lineNumbers) => {
+    if (lineNumbers.length > 2) {
+      findings.push({
+        line: lineNumbers[0],
+        severity: "improvement",
+        issue: `Similar code pattern repeated ${lineNumbers.length} times. Consider extracting to a shared function.`,
+      });
+    }
+  });
+
   return findings;
 }
 

@@ -1,10 +1,13 @@
-export type Severity = "error" | "warning" | "suggestion";
+export type Severity = "error" | "warning" | "suggestion" | "improvement";
 
 export interface ReviewComment {
   file: string;
   line: number;
   severity: Severity;
   comment: string;
+  reasoning?: string; // Why this is an issue (Phase 2)
+  suggestedFix?: string; // How to fix it (Phase 2)
+  confidence?: number; // 0-1 confidence score (Phase 2)
 }
 
 export interface ReviewResult {
@@ -79,6 +82,7 @@ export interface AgentReviewResult {
     errors: number;
     warnings: number;
     suggestions: number;
+    improvements: number;
     filesReviewed: number;
   };
 }

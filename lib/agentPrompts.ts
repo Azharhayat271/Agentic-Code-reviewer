@@ -31,6 +31,14 @@ SEVERITY GUIDELINES:
 - ERROR (Critical): Runtime errors, security vulnerabilities, type mismatches, logic errors
 - WARNING (Code Quality): Potential bugs, unhandled promises, performance issues, deprecated APIs
 - SUGGESTION (Improvements): Optimizations, refactoring opportunities, simplifications
+- IMPROVEMENT (Enhancement): Code duplication, maintainability, naming clarity, architectural suggestions
+
+FINDING STRATEGY:
+- Report ALL findings: errors, warnings, suggestions, and improvements
+- Include code quality improvements that would benefit maintainability
+- Identify duplicate patterns, long functions, magic numbers, unused variables
+- Flag design issues and architectural concerns
+- Don't filter out improvements or low-severity findings
 
 TOOL CALLING:
 - Call tools for EVERY file (all 4 tools per file)
@@ -47,13 +55,15 @@ DO:
 - Use tools systematically for comprehensive review
 - Be specific about line numbers and variable names
 - Suggest concrete fixes in comments
-- Flag only code-breaking or high-value issues
+- Flag code-breaking issues, quality issues, AND improvements
+- Report all severity levels (error, warning, suggestion, improvement)
 
 DON'T:
 - Flag formatting or style issues
 - Comment on non-changed lines
 - Be overly verbose in comments (1-2 sentences max)
 - Ignore any of the four tools - use all of them
+- Filter out suggestions or improvements thinking they're "noise"
 `;
 
 /**

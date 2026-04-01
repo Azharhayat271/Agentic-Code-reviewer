@@ -63,24 +63,43 @@ export async function POST(req: NextRequest) {
 
     console.log("[analyze] Found", relevantFiles.length, "relevant files");
 
-    // Use patches (diffs) instead of full file content - they're 100x smaller!
-    // This prevents token limit issues
-    const filesToAnalyze: FileToAnalyze[] = relevantFiles
-      .filter((f) => f.patch) // Only files with changes
-      .map((file) => {
-        // Detect language
-        let language: "typescript" | "javascript" | "jsx" | "tsx" = "javascript";
-        if (file.filename.endsWith(".tsx")) language = "tsx";
-        else if (file.filename.endsWith(".ts")) language = "typescript";
-        else if (file.filename.endsWith(".jsx")) language = "jsx";
+    // Fetch full file content for better LLM context (Phase 2)
+    // For each changed file, we fetch the HEAD version for context
+    console.log("[analyze] Fetching full file content for LLM analysis...");
+    
+    const filesToAnalyze: FileToAnalyze[] = [];
+    
+    for (const file of relevantFiles) {
+      if (!file.patch) continue;
+      
+      let language: "typescript" | "javascript" | "jsx" | "tsx" = "javascript";
+      if (file.filename.endsWith(".tsx")) language = "tsx";
+      else if (file.filename.endsWith(".ts")) language = "typescript";
+      else if (file.filename.endsWith(".jsx")) language = "jsx";
 
-        return {
-          filename: file.filename,
-          patch: file.patch,
-          content: file.patch, // Use patch as content - much faster and smaller
-          language,
-        };
+      let fullContent = file.patch; // Fallback to patch if full fetch fails
+      
+      try {
+        // Try to fetch full file content from the PR's HEAD
+        fullContent = await fetchFileContent(
+          githubToken,
+          prInfo.owner,
+          prInfo.repo,
+          file.filename,
+          headSha
+        );
+      } catch (error) {
+        // If fetch fails, fall back to patch
+        console.warn(`[analyze] Could not fetch full content for ${file.filename}, using patch`);
+      }
+
+      filesToAnalyze.push({
+        filename: file.filename,
+        patch: file.patch,
+        content: fullContent, // Full file content for richer LLM analysis
+        language,
       });
+    }
 
     console.log("[analyze] Prepared", filesToAnalyze.length, "files for analysis");
     console.log("[analyze] Starting agent orchestration...");
