@@ -5,21 +5,14 @@
  */
 
 import OpenAI from "openai";
-import { ReviewComment, AgentReviewResult, Severity } from "@/types";
-import { AGENT_TOOLS } from "@/lib/agentTools";
-import { AGENT_SYSTEM_PROMPT, AGENT_USER_PROMPT_TEMPLATE, AGENT_FINALIZE_PROMPT } from "@/lib/agentPrompts";
-import {
-  analyzeFile,
-  checkSecurity,
-  checkPerformance,
-  checkTypes,
-} from "@/lib/toolImplementations";
+import { ReviewComment, AgentReviewResult, DiffSection } from "@/types";
 import { analyzeSemanticallyLLM } from "@/lib/llmAnalyzerTool";
+import { filterFindingsToChangedLines } from "@/lib/diffParser";
 
 export interface FileToAnalyze {
   filename: string;
   patch?: string;
-  content?: string; // Full file content for analysis
+  diffSections: DiffSection[]; // Changed code sections from the diff
   language?: "typescript" | "javascript" | "jsx" | "tsx";
 }
 
@@ -37,62 +30,56 @@ function getLanguageFromFilename(
 }
 
 /**
- * Execute a tool function based on tool name
- */
-async function executeTool(
-  toolName: string,
-  toolInput: Record<string, unknown>
-): Promise<{ file: string; findings: Array<{ line: number; severity: string; issue: string }> }> {
-  const { file, code, language } = toolInput as {
-    file: string;
-    code: string;
-    language: string;
-  };
-
-  const typedLanguage = language as "typescript" | "javascript" | "jsx" | "tsx";
-
-  let findings = [];
-
-  switch (toolName) {
-    case "analyze_file":
-      findings = await analyzeFile(file, code, typedLanguage);
-      break;
-    case "check_security":
-      findings = await checkSecurity(file, code, typedLanguage);
-      break;
-    case "check_performance":
-      findings = await checkPerformance(file, code, typedLanguage);
-      break;
-    case "check_types":
-      findings = await checkTypes(file, code, typedLanguage);
-      break;
-    default:
-      throw new Error(`Unknown tool: ${toolName}`);
-  }
-
-  return { file, findings };
-}
-
-/**
- * Analyze a single file using LLM semantic analysis (Phase 2)
- * Replaces regex-based tools with deep AI understanding
+ * Analyze a single file using LLM semantic analysis (Phase 3: Diff-based analysis)
+ * Only analyzes the changed code sections from the diff, not the entire file
  */
 async function analyzeFileSemanticLLM(
   file: FileToAnalyze,
   client: OpenAI
 ): Promise<ReviewComment[]> {
-  if (!file.content) {
-    console.log(`[llm-analyzer] Skipping ${file.filename} - no content`);
+  if (!file.diffSections || file.diffSections.length === 0) {
+    console.log(`[llm-analyzer] Skipping ${file.filename} - no diff sections`);
     return [];
   }
 
   const language = file.language || getLanguageFromFilename(file.filename);
   
   try {
-    const findings = await analyzeSemanticallyLLM(client, file.filename, file.content, language);
+    // Build code content with line numbers marked for clarity
+    // Format: [CHANGED] N: code line
+    const codeContentWithLineNumbers = file.diffSections
+      .map((section) => {
+        const lines = section.content.split("\n");
+        return lines
+          .map((line, idx) => {
+            const lineNum = section.startLine + idx;
+            const isChanged = section.lineNumbers.includes(lineNum);
+            const marker = isChanged ? "[CHANGED]" : "[context]";
+            return `${marker} ${lineNum}: ${line}`;
+          })
+          .join("\n");
+      })
+      .join("\n\n");
+
+    const findings = await analyzeSemanticallyLLM(
+      client,
+      file.filename,
+      codeContentWithLineNumbers,
+      language,
+      file.diffSections
+    );
     
+    // Defensive filtering: ensure findings are only on changed lines
+    const filteredFindings = filterFindingsToChangedLines(findings, file.diffSections);
+    
+    if (filteredFindings.length < findings.length) {
+      console.warn(
+        `[llm-analyzer] ${file.filename}: Filtered ${findings.length - filteredFindings.length} findings outside changed lines`
+      );
+    }
+
     // Convert semantic findings to ReviewComment format
-    const comments: ReviewComment[] = findings.map((finding) => ({
+    const comments: ReviewComment[] = filteredFindings.map((finding) => ({
       file: file.filename,
       line: finding.line,
       severity: finding.severity,
@@ -107,105 +94,6 @@ async function analyzeFileSemanticLLM(
     console.error(`[llm-analyzer] Error analyzing ${file.filename}:`, error);
     return [];
   }
-}
-
-/**
- * Analyze a single file with its own agent loop
- * Each file gets independent analysis to avoid token limits
- */
-async function analyzeFileWithAgent(
-  file: FileToAnalyze,
-  client: OpenAI
-): Promise<Array<{ line: number; severity: string; issue: string }>> {
-  if (!file.content) {
-    console.log(`[agent-file] Skipping ${file.filename} - no content`);
-    return [];
-  }
-
-  const language = file.language || getLanguageFromFilename(file.filename);
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
-    {
-      role: "user",
-      content: `Analyze this code file using all available tools:
-
-File: ${file.filename}
-Language: ${language}
-
-Code changes:
-\`\`\`${language}
-${file.content}
-\`\`\`
-
-Call all 4 tools: analyze_file, check_security, check_performance, and check_types for this file.`,
-    },
-  ];
-
-  let fileFindings: Array<{ line: number; severity: string; issue: string }> = [];
-  let iterations = 0;
-  const maxIterations = 10; // Each file gets up to 10 iterations (increased from 5)
-
-  console.log(`[agent-file] Analyzing ${file.filename}...`);
-
-  while (iterations < maxIterations) {
-    iterations++;
-
-    try {
-      const response = await client.chat.completions.create({
-        model: "gpt-4o",
-        messages,
-        tools: AGENT_TOOLS as unknown as OpenAI.ChatCompletionTool[],
-        tool_choice: "auto",
-        temperature: 0.3,
-        max_tokens: 2048, // Increased from 1024 for deeper analysis
-      });
-
-      if (response.choices[0].finish_reason === "tool_calls") {
-        const toolCalls = response.choices[0].message.tool_calls || [];
-
-        messages.push({
-          role: "assistant",
-          content: response.choices[0].message.content || "",
-          tool_calls: toolCalls as OpenAI.ChatCompletionMessageToolCall[],
-        });
-
-        // Execute tools and add results as separate messages (correct OpenAI format)
-        for (const toolCall of toolCalls) {
-          try {
-            const toolInput = JSON.parse(toolCall.function.arguments);
-            const result = await executeTool(toolCall.function.name, toolInput);
-            fileFindings.push(...result.findings);
-
-            // Add each tool result as a separate message with role 'tool'
-            messages.push({
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(result),
-            });
-          } catch (error) {
-            // Add error as tool result
-            messages.push({
-              role: "tool",
-              tool_call_id: toolCall.id,
-              content: JSON.stringify({
-                error: error instanceof Error ? error.message : "Unknown error",
-              }),
-            });
-          }
-        }
-      } else {
-        // Agent finished or hit limit
-        break;
-      }
-    } catch (error) {
-      console.error(`[agent-file] Error analyzing ${file.filename}:`, error);
-      break;
-    }
-  }
-
-  console.log(
-    `[agent-file] ${file.filename}: ${fileFindings.length} findings in ${iterations} iterations`
-  );
-  return fileFindings;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchPRFiles, fetchPRTitle, fetchPRDetails, fetchFileContent, parsePRUrl } from "@/lib/github";
+import { fetchPRFiles, fetchPRTitle, fetchPRDetails, parsePRUrl } from "@/lib/github";
 import { orchestrateCodeReview, FileToAnalyze } from "@/lib/agentOrchestrator";
+import { parseDiffPatch } from "@/lib/diffParser";
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,9 +64,9 @@ export async function POST(req: NextRequest) {
 
     console.log("[analyze] Found", relevantFiles.length, "relevant files");
 
-    // Fetch full file content for better LLM context (Phase 2)
-    // For each changed file, we fetch the HEAD version for context
-    console.log("[analyze] Fetching full file content for LLM analysis...");
+    // Parse diffs to extract only changed code (Phase 3: Restrict to changed lines)
+    // Instead of analyzing the entire file, we only analyze the actual changes
+    console.log("[analyze] Parsing diffs to identify changed lines...");
     
     const filesToAnalyze: FileToAnalyze[] = [];
     
@@ -77,31 +78,23 @@ export async function POST(req: NextRequest) {
       else if (file.filename.endsWith(".ts")) language = "typescript";
       else if (file.filename.endsWith(".jsx")) language = "jsx";
 
-      let fullContent = file.patch; // Fallback to patch if full fetch fails
-      
-      try {
-        // Try to fetch full file content from the PR's HEAD
-        fullContent = await fetchFileContent(
-          githubToken,
-          prInfo.owner,
-          prInfo.repo,
-          file.filename,
-          headSha
-        );
-      } catch (error) {
-        // If fetch fails, fall back to patch
-        console.warn(`[analyze] Could not fetch full content for ${file.filename}, using patch`);
+      // Parse the unified diff to extract changed sections
+      const diffSections = parseDiffPatch(file.patch);
+
+      if (diffSections.length === 0) {
+        console.warn(`[analyze] ${file.filename}: No changed code sections found in patch`);
+        continue;
       }
 
       filesToAnalyze.push({
         filename: file.filename,
         patch: file.patch,
-        content: fullContent, // Full file content for richer LLM analysis
+        diffSections, // Only analyze the changed sections
         language,
       });
     }
 
-    console.log("[analyze] Prepared", filesToAnalyze.length, "files for analysis");
+    console.log("[analyze] Prepared", filesToAnalyze.length, "files for analysis with diff parsing");
     console.log("[analyze] Starting agent orchestration...");
 
     // Run the agentic code review
