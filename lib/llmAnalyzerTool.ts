@@ -1,10 +1,5 @@
-/**
- * LLM Semantic Analyzer Tool for Phase 2
- * Replaces regex-based tools with real AI semantic analysis
- * Uses GPT-4 directly to understand code intent and find deep issues
- */
-
 import OpenAI from "openai";
+import { DiffSection } from "@/types";
 
 export interface SemanticFinding {
   line: number;
@@ -34,34 +29,43 @@ function parseJsonResponse(content: string): unknown {
 
 /**
  * Analyzes code for bugs and logic errors using semantic understanding
+ * ONLY analyzes lines marked with [CHANGED] - ignore context lines
  */
 export async function analyzeBugsSemanticLLM(
   client: OpenAI,
   file: string,
   code: string,
-  language: "typescript" | "javascript" | "jsx" | "tsx"
+  language: "typescript" | "javascript" | "jsx" | "tsx",
+  diffSections: DiffSection[]
 ): Promise<SemanticFinding[]> {
   const prompt = `You are an expert code reviewer analyzing this ${language} file for BUGS and LOGIC ERRORS.
 
 FILE: ${file}
+IMPORTANT: This code shows changed lines marked with [CHANGED] and context lines marked with [context].
+>>>>> YOU MUST ONLY REPORT FINDINGS ON LINES MARKED [CHANGED] <<<<<
+Do NOT report issues on [context] lines - only on the actual changes.
+
 CODE:
 \`\`\`${language}
 ${code}
 \`\`\`
 
-TASK: Find real bugs, logic errors, and runtime issues. Look for:
-1. Race conditions or async/await issues
-2. Null/undefined handling problems
-3. Logic errors in conditionals or loops
-4. Off-by-one errors
-5. Incorrect API usage
-6. State management bugs (React hooks, etc.)
-7. Missing error handling
-8. Infinite loops or deadlocks
-9. Type mismatches
-10. Incorrect regular expressions
+TASK: Find ONLY bugs and logic errors IN THE CHANGED CODE. Look for:
+1. Race conditions or async/await issues in changed code
+2. Null/undefined handling problems in changed code
+3. Logic errors in conditionals or loops (changed lines only)
+4. Off-by-one errors in changed code
+5. Incorrect API usage in changed code
+6. State management bugs (React hooks, etc.) - only in changes
+7. Missing error handling in changed code
+8. Infinite loops or deadlocks in changed code
+9. Type mismatches in changed code
+10. Incorrect regular expressions in changed code
 
-For each issue found, respond with ONLY a JSON array in this format (no other text):
+CRITICAL: Only report findings where the issue is ON a [CHANGED] line. 
+Ignore any issues on [context] lines.
+
+For each bug found ONLY in changed code, respond with ONLY a JSON array in this format (no other text):
 [
   {
     "line": 42,
@@ -73,7 +77,7 @@ For each issue found, respond with ONLY a JSON array in this format (no other te
   }
 ]
 
-If no bugs found, return empty array: []
+If no bugs found in changed code, return empty array: []
 `;
 
   try {
@@ -95,34 +99,43 @@ If no bugs found, return empty array: []
 
 /**
  * Analyzes code for performance issues using semantic understanding
+ * ONLY analyzes lines marked with [CHANGED] - ignore context lines
  */
 export async function analyzePerformanceSemanticLLM(
   client: OpenAI,
   file: string,
   code: string,
-  language: "typescript" | "javascript" | "jsx" | "tsx"
+  language: "typescript" | "javascript" | "jsx" | "tsx",
+  diffSections: DiffSection[]
 ): Promise<SemanticFinding[]> {
   const prompt = `You are an expert performance analyst reviewing this ${language} code.
 
 FILE: ${file}
+IMPORTANT: This code shows changed lines marked with [CHANGED] and context lines marked with [context].
+>>>>> YOU MUST ONLY REPORT FINDINGS ON LINES MARKED [CHANGED] <<<<<
+Do NOT report issues on [context] lines - only on the actual changes.
+
 CODE:
 \`\`\`${language}
 ${code}
 \`\`\`
 
-TASK: Find performance issues and optimization opportunities. Look for:
-1. N+1 query patterns (loops making queries)
-2. Unnecessary re-renders in React
-3. Missing memoization (useMemo, React.memo)
-4. Inefficient algorithms (quadratic time complexity)
-5. Memory leaks (event listeners, subscriptions not cleaned up)
-6. Large synchronous operations blocking the event loop
-7. DOM queries in loops
-8. Inefficient data structures
-9. Missing dependency arrays in hooks
-10. Debouncing/throttling opportunities
+TASK: Find ONLY performance issues and optimization opportunities IN THE CHANGED CODE. Look for:
+1. N+1 query patterns (loops making queries) - only in changed code
+2. Unnecessary re-renders in React - only in changed code
+3. Missing memoization (useMemo, React.memo) - only in changed code
+4. Inefficient algorithms (quadratic time complexity) - only in changed code
+5. Memory leaks (event listeners, subscriptions not cleaned up) - only in changed code
+6. Large synchronous operations blocking the event loop - only in changed code
+7. DOM queries in loops - only in changed code
+8. Inefficient data structures - only in changed code
+9. Missing dependency arrays in hooks - only in changed code
+10. Debouncing/throttling opportunities - only in changed code
 
-For each issue found, respond with ONLY a JSON array:
+CRITICAL: Only report findings where the performance issue is ON a [CHANGED] line.
+Ignore any performance issues on [context] lines.
+
+For each issue found ONLY in changed code, respond with ONLY a JSON array:
 [
   {
     "line": 12,
@@ -134,7 +147,7 @@ For each issue found, respond with ONLY a JSON array:
   }
 ]
 
-If no performance issues found, return: []
+If no performance issues found in changed code, return: []
 `;
 
   try {
@@ -156,34 +169,43 @@ If no performance issues found, return: []
 
 /**
  * Analyzes code for security vulnerabilities using semantic understanding
+ * ONLY analyzes lines marked with [CHANGED] - ignore context lines
  */
 export async function analyzeSecuritySemanticLLM(
   client: OpenAI,
   file: string,
   code: string,
-  language: "typescript" | "javascript" | "jsx" | "tsx"
+  language: "typescript" | "javascript" | "jsx" | "tsx",
+  diffSections: DiffSection[]
 ): Promise<SemanticFinding[]> {
   const prompt = `You are a security expert reviewing this ${language} code for vulnerabilities.
 
 FILE: ${file}
+IMPORTANT: This code shows changed lines marked with [CHANGED] and context lines marked with [context].
+>>>>> YOU MUST ONLY REPORT FINDINGS ON LINES MARKED [CHANGED] <<<<<
+Do NOT report issues on [context] lines - only on the actual changes.
+
 CODE:
 \`\`\`${language}
 ${code}
 \`\`\`
 
-TASK: Find security vulnerabilities and risks. Look for:
-1. XSS vulnerabilities (dangerouslySetInnerHTML, innerHTML, eval)
-2. SQL injection patterns
-3. Command injection risks
-4. Hardcoded credentials/secrets
-5. Insecure randomness
-6. Missing input validation
-7. CSRF vulnerabilities
-8. Authentication/authorization flaws
-9. Sensitive data exposure
-10. Insecure deserialization
+TASK: Find ONLY security vulnerabilities IN THE CHANGED CODE. Look for:
+1. XSS vulnerabilities (dangerouslySetInnerHTML, innerHTML, eval) - only in changed code
+2. SQL injection patterns - only in changed code
+3. Command injection risks - only in changed code
+4. Hardcoded credentials/secrets - only in changed code
+5. Insecure randomness - only in changed code
+6. Missing input validation - only in changed code
+7. CSRF vulnerabilities - only in changed code
+8. Authentication/authorization flaws - only in changed code
+9. Sensitive data exposure - only in changed code
+10. Insecure deserialization - only in changed code
 
-For each vulnerability found, respond with ONLY a JSON array:
+CRITICAL: Only report findings where the security issue is ON a [CHANGED] line.
+Ignore any security issues on [context] lines.
+
+For each vulnerability found ONLY in changed code, respond with ONLY a JSON array:
 [
   {
     "line": 28,
@@ -195,7 +217,7 @@ For each vulnerability found, respond with ONLY a JSON array:
   }
 ]
 
-If no vulnerabilities found, return: []
+If no vulnerabilities found in changed code, return: []
 `;
 
   try {
@@ -217,34 +239,43 @@ If no vulnerabilities found, return: []
 
 /**
  * Analyzes code for design and architectural issues
+ * ONLY analyzes lines marked with [CHANGED] - ignore context lines
  */
 export async function analyzeDesignSemanticLLM(
   client: OpenAI,
   file: string,
   code: string,
-  language: "typescript" | "javascript" | "jsx" | "tsx"
+  language: "typescript" | "javascript" | "jsx" | "tsx",
+  diffSections: DiffSection[]
 ): Promise<SemanticFinding[]> {
   const prompt = `You are a software architect reviewing this ${language} code for design quality.
 
 FILE: ${file}
+IMPORTANT: This code shows changed lines marked with [CHANGED] and context lines marked with [context].
+>>>>> YOU MUST ONLY REPORT FINDINGS ON LINES MARKED [CHANGED] <<<<<
+Do NOT report issues on [context] lines - only on the actual changes.
+
 CODE:
 \`\`\`${language}
 ${code}
 \`\`\`
 
-TASK: Find design, architectural, and maintainability issues. Look for:
-1. Code duplication (repeated patterns)
-2. Long functions/methods (>30 lines should be split)
-3. Deeply nested logic (>3 levels)
-4. Poor separation of concerns
-5. Unclear variable/function names
-6. Missing abstractions
-7. Tight coupling
-8. God objects
-9. Magic numbers/strings
-10. Dead code or unused variables
+TASK: Find ONLY design, architectural, and maintainability issues IN THE CHANGED CODE. Look for:
+1. Code duplication (repeated patterns) - only in changed code
+2. Long functions/methods (>30 lines should be split) - only in changed code
+3. Deeply nested logic (>3 levels) - only in changed code
+4. Poor separation of concerns - only in changed code
+5. Unclear variable/function names - only in changed code
+6. Missing abstractions - only in changed code
+7. Tight coupling - only in changed code
+8. God objects - only in changed code
+9. Magic numbers/strings - only in changed code
+10. Dead code or unused variables - only in changed code
 
-For each issue found, respond with ONLY a JSON array:
+CRITICAL: Only report findings where the design issue is ON a [CHANGED] line.
+Ignore any design issues on [context] lines.
+
+For each issue found ONLY in changed code, respond with ONLY a JSON array:
 [
   {
     "line": 15,
@@ -256,7 +287,7 @@ For each issue found, respond with ONLY a JSON array:
   }
 ]
 
-If no design issues found, return: []
+If no design issues found in changed code, return: []
 `;
 
   try {
@@ -278,22 +309,24 @@ If no design issues found, return: []
 
 /**
  * Run all semantic analyses in parallel for a single file
+ * Passes diff sections to all analyzers for focused review
  */
 export async function analyzeSemanticallyLLM(
   client: OpenAI,
   file: string,
   code: string,
-  language: "typescript" | "javascript" | "jsx" | "tsx"
+  language: "typescript" | "javascript" | "jsx" | "tsx",
+  diffSections: DiffSection[]
 ): Promise<SemanticFinding[]> {
   console.log(`[llm-analyzer] Starting semantic analysis for ${file}...`);
 
   try {
-    // Run all 4 analyses in parallel
+    // Run all 4 analyses in parallel, passing diffSections to each
     const [bugs, performance, security, design] = await Promise.all([
-      analyzeBugsSemanticLLM(client, file, code, language),
-      analyzePerformanceSemanticLLM(client, file, code, language),
-      analyzeSecuritySemanticLLM(client, file, code, language),
-      analyzeDesignSemanticLLM(client, file, code, language),
+      analyzeBugsSemanticLLM(client, file, code, language, diffSections),
+      analyzePerformanceSemanticLLM(client, file, code, language, diffSections),
+      analyzeSecuritySemanticLLM(client, file, code, language, diffSections),
+      analyzeDesignSemanticLLM(client, file, code, language, diffSections),
     ]);
 
     const allFindings = [...bugs, ...performance, ...security, ...design];
@@ -324,7 +357,7 @@ export async function analyzeSemanticallyLLM(
     const dedupedFindings = Array.from(deduped.values()).sort((a, b) => a.line - b.line);
 
     console.log(
-      `[llm-analyzer] ${file}: Found ${dedupedFindings.length} unique semantic issues`
+      `[llm-analyzer] ${file}: Found ${dedupedFindings.length} unique semantic issues in changed code`
     );
     return dedupedFindings;
   } catch (error) {

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Test script for Phase 2 LLM Semantic Analyzer
- * Tests the LLM-based analysis on sample code
+ * Test script for Phase 3 LLM Semantic Analyzer
+ * Tests the LLM-based analysis on sample code with diff sections
  */
 
 import OpenAI from "openai";
+import type { DiffSection } from "./types/index.js";
 import {
   analyzeBugsSemanticLLM,
   analyzePerformanceSemanticLLM,
@@ -20,6 +21,16 @@ if (!apiKey) {
 }
 
 const client = new OpenAI({ apiKey });
+
+// Mock DiffSection for testing - represents all lines as changed
+const mockDiffSections: DiffSection[] = [
+  {
+    startLine: 1,
+    endLine: 100,
+    content: "",
+    lineNumbers: Array.from({ length: 100 }, (_, i) => i + 1),
+  },
+];
 
 // Sample bug-prone code
 const sampleBuggyCode = `
@@ -95,7 +106,8 @@ async function runTests() {
       client,
       "test-bugs.ts",
       sampleBuggyCode,
-      "typescript"
+      "typescript",
+      mockDiffSections
     );
     console.log(`- Found ${bugs.length} bugs`);
     bugs.forEach((bug) => {
@@ -110,7 +122,8 @@ async function runTests() {
       client,
       "test-perf.tsx",
       samplePerformanceCode,
-      "tsx"
+      "tsx",
+      mockDiffSections
     );
     console.log(`- Found ${perf.length} performance issues`);
     perf.forEach((issue) => {
@@ -125,7 +138,8 @@ async function runTests() {
       client,
       "test-full.ts",
       sampleBuggyCode,
-      "typescript"
+      "typescript",
+      mockDiffSections
     );
     console.log(`- Found ${allFindings.length} total findings`);
     allFindings.forEach((finding) => {

@@ -1,5 +1,16 @@
 export type Severity = "error" | "warning" | "suggestion" | "improvement";
 
+/**
+ * Represents a section of changed code in a diff
+ * Used to restrict code analysis to only changed lines in PR reviews
+ */
+export interface DiffSection {
+  startLine: number;      // Starting line number in the new file
+  endLine: number;        // Ending line number in the new file
+  content: string;        // The actual code content (with line numbers marked)
+  lineNumbers: number[]; // Array of line numbers that were actually changed
+}
+
 export interface ReviewComment {
   file: string;
   line: number;
